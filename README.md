@@ -1,6 +1,7 @@
 # Equilibrium Propagation
 
 This repo contains code for a reimplementation of the paper:
+
 [Generalization of Equilibrium Propagation to Vector Field Dynamics](https://arxiv.org/abs/1808.04873)
 
 ### Requirements
