@@ -10,7 +10,7 @@ def rho(state):
     return np.clip(state, 0, 1)
 
 class Network(ABC):
-    """ Class that represents an Hopfield network """
+    """ Class that represents an (undirected) Hopfield network """
     def __init__(self, 
                  states, 
                  weights):
@@ -50,8 +50,6 @@ class Network(ABC):
                 for pre_idx, weight_idx in network.connected(i):
                     incoming = incoming + np.dot(rho(network.states[pre_idx]), network.weights[weight_idx])
                 dynamics.append(incoming - state)
-
-            #print("output dynamics {}".format(dynamics[-1]))
 
             return dynamics
 
@@ -95,7 +93,7 @@ def free_relaxation(network, num_steps=100, epsilon=0.01):
     return network
 
 
-def clamped_relaxation(network, y, beta=1000., lr=0.05, num_steps=100, epsilon=0.01):
+def clamped_relaxation(network, y, beta=1., lr=0.05, num_steps=100, epsilon=0.01):
     """ TODO """
     clamped_network = network.clone()
     clamped_dynamics = network.clamped_dynamics_fn()
@@ -111,8 +109,6 @@ def clamped_relaxation(network, y, beta=1000., lr=0.05, num_steps=100, epsilon=0
     for state_idx, state_diff in enumerate(states_diffs):
         for pre_idx, weight_idx in network.connected(state_idx):
             grad = np.dot(rho(network.states[pre_idx])[:, np.newaxis], state_diff[np.newaxis, :])
-            #print("weights {}".format(network.weights[weight_idx]))
-            #print("grads {}".format(grad))
             network.weights[weight_idx] = network.weights[weight_idx] + lr * grad
 
     return network

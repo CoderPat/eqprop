@@ -1,5 +1,7 @@
 # # Equilibrium Propagation
 
+# #TODO: some introduction to energy-based methods and equilibrum propagation
+
 # +
 import jax.numpy as np
 import jax.random as random
@@ -16,12 +18,13 @@ from collections import deque
 from six.moves.urllib.request import urlretrieve
 # -
 
-BATCH_SIZE=1
+BATCH_SIZE=16
+LR=0.05
 SEED=0
 
 # +
 free_relaxation = jit_free_relaxation(LayeredNet, batched=True)
-clamped_relaxation = jit_clamped_relaxation(LayeredNet, batched=True)
+clamped_relaxation = jit_clamped_relaxation(LayeredNet, lr=LR, batched=True)
 
 def train(net, 
           train_loader,
@@ -31,31 +34,43 @@ def train(net,
     
     cost_fn = net.cost_fn()
     for epoch in range(1, epochs+1):
+        train_hits = 0
         for step, (x, y) in enumerate(train_loader()):
             # set input and relax states (ie: compute fixed-point)
             net.x = x
             net = free_relaxation(net)
 
+            # log training accuracy
+            yi = np.argmax(y, axis=1)
+            pred_yi = np.argmax(net.output, axis=1)
+            train_hits += np.sum(pred_yi == yi).item()
+            
             # update the weights based on expected output
             net = clamped_relaxation(net, y)
             
+        log_string = ("epoch: {0} | train_acc: {1:.3f}"
+                      .format(epoch, float(train_hits) / ((step+1)*BATCH_SIZE)))
+        
         if valid_loader is not None and not epoch % valid_interval:        
             hits = 0
-            for i, (x, y) in enumerate(valid_loader()):
-                # set input and relax states (ie: compute fixed-point)
+            for step, (x, y) in enumerate(valid_loader()):
+                # set input and relax states 
                 net.x = x
                 net = free_relaxation(net)
                 
                 yi = np.argmax(y, axis=1)
                 pred_yi = np.argmax(net.output, axis=1)
-                hits += sum(pred_yi == yi)
+                hits += np.sum(pred_yi == yi).item()
                 
-            print("epoch: {0}  valid_acc: {1:.3f}".format(epoch, float(hits) / (i+1)))
-
+            valid_log = ("valid_acc: {1:.3f}"
+                         .format(epoch, float(hits) / ((step+1)*BATCH_SIZE)))
+            log_string = log_string + " | " + valid_log
+                                                             
+        print(log_string)
 
 # -
 
-# ## Synthetic Data
+# ### Synthetic Data
 
 # We start by training the network on a synthetic dataset. The input consists of a random one-hot vector and the output is simply the identity on this vector
 
@@ -115,15 +130,15 @@ train(
     valid_interval=2)
 # -
 
-# ## MNIST 
+# ### MNIST 
 
 # +
 path = "mnist.npz"
 urlretrieve('https://s3.amazonaws.com/img-datasets/mnist.npz', path)
 
 with onp.load(path, allow_pickle=True) as f:
-    x_train, y_train = f['x_train'], f['y_train']
-    x_test, y_test = f['x_test'], f['y_test']
+    x_train, y_train = f['x_train'].astype(np.float32), f['y_train']
+    x_test, y_test = f['x_test'].astype(np.float32), f['y_test']
     
 print("train size: {0}, test_size: {1}".format(len(x_train), len(x_test)))
 
@@ -141,9 +156,8 @@ def valid_mnist():
         ys = np.eye(10)[y_test[i:i+BATCH_SIZE]]
         yield xs, ys
 
-
 # +
-net = LayeredNet.new(28*28, 10, [128], random.PRNGKey(SEED))
+net = LayeredNet.new(28*28, 10, [512], random.PRNGKey(SEED))
 net = net.batch(BATCH_SIZE)
 
 train(
@@ -151,4 +165,4 @@ train(
     epochs=100,
     train_loader=train_mnist, 
     valid_loader=valid_mnist,
-    valid_interval=1)
+    valid_interval=2)
