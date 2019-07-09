@@ -1,4 +1,4 @@
 jax 
 jaxlib
-jupyper
+jupyter
 jupytext
