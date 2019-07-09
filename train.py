@@ -18,21 +18,22 @@ from collections import deque
 from six.moves.urllib.request import urlretrieve
 # -
 
-BATCH_SIZE=16
-LR=0.05
+BATCH_SIZE=20
 SEED=0
 
-# +
-free_relaxation = jit_free_relaxation(LayeredNet, batched=True)
-clamped_relaxation = jit_clamped_relaxation(LayeredNet, lr=LR, batched=True)
 
 def train(net, 
           train_loader,
           epochs,
+          lr=0.1,
           valid_loader=None,
           valid_interval=200):
     
     cost_fn = net.cost_fn()
+    
+    free_relaxation = jit_free_relaxation(LayeredNet, batched=True)
+    clamped_relaxation = jit_clamped_relaxation(LayeredNet, lr=lr, batched=True)
+
     for epoch in range(1, epochs+1):
         train_hits = 0
         for step, (x, y) in enumerate(train_loader()):
@@ -68,13 +69,12 @@ def train(net,
                                                              
         print(log_string)
 
-# -
 
 # ### Synthetic Data
 
 # We start by training the network on a synthetic dataset. The input consists of a random one-hot vector and the output is simply the identity on this vector
 
-def dataloader(mode='train'):
+def dataloader():
     for _ in range(100):
         xs, ys = [], []
         for _ in range(BATCH_SIZE):
@@ -157,12 +157,16 @@ def valid_mnist():
         yield xs, ys
 
 # +
-net = LayeredNet.new(28*28, 10, [512], random.PRNGKey(SEED))
+net = LayeredNet.new(28*28, 10, [512, 512], random.PRNGKey(SEED))
 net = net.batch(BATCH_SIZE)
+
+lr = [0.4, 0.1, 0.01]
+lr = [*lr, *lr]
 
 train(
     net,
     epochs=100,
+    lr=lr,
     train_loader=train_mnist, 
     valid_loader=valid_mnist,
     valid_interval=2)

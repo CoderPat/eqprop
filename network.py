@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from collections import namedtuple
+from collections import defaultdict
 
 import jax.numpy as np
 from jax import grad, jit, vmap
@@ -116,7 +116,7 @@ def clamped_relaxation(network, y, beta=1., lr=0.05, num_steps=100, epsilon=0.01
 
 
 # JIT-able versions of the relaxation function, with batching as an option
-def jit_free_relaxation(network_cls, num_steps=100, epsilon=0.01, batched=False):
+def jit_free_relaxation(network_cls, num_steps=200, epsilon=0.01, batched=False):
     """ """
     free_dynamics = network_cls.free_dynamics_fn()
 
@@ -134,11 +134,16 @@ def jit_free_relaxation(network_cls, num_steps=100, epsilon=0.01, batched=False)
     return lambda network: network_cls(*_free_relaxation(*network))
 
 
-def jit_clamped_relaxation(network_cls, beta=1000., lr=0.05, num_steps=100, epsilon=0.01, batched=False):
+def jit_clamped_relaxation(network_cls, beta=1000., lr=0.1, num_steps=100, epsilon=0.01, batched=False):
     """ """
     clamped_dynamics = network_cls.clamped_dynamics_fn()
 
-    def weight_grads(states, weights, y, beta):
+    # 
+    if isinstance(lr, float):
+        lr_value = lr
+        lr = defaultdict(lambda: lr_value)
+
+    def weight_grads(states, weights, y):
         clamped_states = states.copy()
         for _ in range(num_steps):
             for i, delta in enumerate(clamped_dynamics(states, weights, y, beta)[1:], 1):
@@ -158,15 +163,15 @@ def jit_clamped_relaxation(network_cls, beta=1000., lr=0.05, num_steps=100, epsi
         return grads
 
     if batched:
-        weight_grads = vmap_mean(weight_grads, (0, None, 0, None))
+        weight_grads = vmap_mean(weight_grads, (0, None, 0))
 
     @jit
-    def _clamped_relaxation(states, weights, y, beta):
-        grads = weight_grads(states, weights, y, beta)
+    def _clamped_relaxation(states, weights, y):
+        grads = weight_grads(states, weights, y)
         for weight_idx, grad in enumerate(grads):
-            weights[weight_idx] = weights[weight_idx] + lr * grad
+            weights[weight_idx] = weights[weight_idx] + lr[weight_idx] * grad
         return states, weights
 
-    return lambda network, y: network_cls(*_clamped_relaxation(*network, y, beta))
+    return lambda network, y: network_cls(*_clamped_relaxation(*network, y))
         
 
