@@ -1,4 +1,4 @@
-# Equilibrium Propagation
+# Equilibrium Propagation (WIP)
 
 This repo contains code for a reimplementation of the paper:
 
